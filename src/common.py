@@ -307,7 +307,9 @@ def new_experiment(account: str):
             continue
         if prior_type == 'Continuous':
             lower = st.number_input(label='Lower', value=0., key=f'lower_{i}')
-            upper = st.number_input(label='Upper', value=1., min_value=lower, key=f'upper_{i}')
+            upper = st.number_input(label='Upper', value=1., key=f'upper_{i}')
+            if lower >= upper:
+                st.error("Lower must be < Upper")
             mode = st.number_input(label='Best Guess', key=f'mode_{i}', value=(upper + lower) / 2.,
                                    help='Best guess of location of optimum.')
             uncert = max(upper - lower, 1e-6)
@@ -316,7 +318,9 @@ def new_experiment(account: str):
             prior = ContinuousPrior(lower=lower, upper=upper, mode=mode, uncert=uncert)
         elif prior_type == 'Integer':
             lower = st.number_input(label='Lower', value=0, key=f'lower_{i}', step=1, help='inclusive')
-            upper = st.number_input(label='Upper', value=1, key=f'upper_{i}', step=1, min_value=lower, help='inclusive')
+            upper = st.number_input(label='Upper', value=1, key=f'upper_{i}', step=1, help='inclusive')
+            if lower >= upper:
+                st.error("Lower must be < Upper")
             mode = st.number_input(label='Best Guess', key=f'mode_{i}', value=(upper + lower) / 2.,
                                    help='Best guess of location of optimum.')
             uncert = max(upper - lower, 1e-6)
