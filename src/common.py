@@ -99,7 +99,7 @@ class Experiment(BaseModel):
         default_factory=dict,
         description='map (trial) -> (batch_meta)'
     )
-    rating_system: Literal['5 star system', 'percent system', 'unbounded']
+    rating_system: Literal['5 star system', 'percent system', 'unbounded system']
     illegal_value: float
 
 
