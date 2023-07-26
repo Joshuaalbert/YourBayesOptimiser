@@ -342,12 +342,13 @@ def new_experiment(account: str):
             raise ValueError(f"Invalid {prior_type}")
         param = Parameter(name=param_name, prior=prior)
         parameters.append(param)
-    parameter_space = ParameterSpace(parameters=parameters)
-    new_experiment_request = NewExperimentRequest(
-        parameter_space=parameter_space,
-        init_explore_size=init_explore_num
-    )
+
     if st.button('Create New Experiment'):
+        parameter_space = ParameterSpace(parameters=parameters)
+        new_experiment_request = NewExperimentRequest(
+            parameter_space=parameter_space,
+            init_explore_size=init_explore_num
+        )
         bo_experiment = BayesianOptimisation.create_new_experiment(new_experiment=new_experiment_request)
         experiment_id = str(uuid4())
         experiment = Experiment(
