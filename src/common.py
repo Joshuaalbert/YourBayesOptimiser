@@ -587,11 +587,12 @@ def ask_rating(ref_id: str, trial_id: str, experiment: Experiment):
 
         first_choice = st.selectbox("How would you categorise it?",
                                     index=0,
-                                    options=['Please Choose']+list(first_level.keys()),
+                                    options=['']+list(first_level.keys()),
                                     placeholder='Please select a category',
+                                    format_func=lambda x: 'Select an option' if x == '' else x,
                                     key='first_choice_culinary'
                                     )
-        if first_choice is not None:
+        if first_choice:
             options = list(filter(
                 lambda k: first_level[first_choice][0] <= rating_dict[k] <= first_level[first_choice][1],
                 sorted(rating_dict.keys(), key=lambda k: rating_dict[k])
