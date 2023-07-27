@@ -577,9 +577,9 @@ def ask_rating(ref_id: str, trial_id: str, experiment: Experiment):
             "The Pinnacle (100%): As good as it can possibly be. The epitome of culinary delight.": 1.00
         }
         options = sorted(rating_dict.keys(), key=lambda k: rating_dict[k])
-        rating_choice = st.select_slider('Please select the rating that best matches your thoughts.',
-                                         options=options,
-                                         key=f"rate_{ref_id}_{trial_id}")
+        rating_choice = st.radio('Please select the rating that best matches your thoughts.',
+                                 options=options,
+                                 key=f"rate_{ref_id}_{trial_id}")
         rating = rating_dict[rating_choice]
     elif experiment.rating_system == '5 star system':
         rating = st.slider('How many stars would you rate this out of 5?',
