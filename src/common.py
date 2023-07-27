@@ -576,13 +576,29 @@ def ask_rating(ref_id: str, trial_id: str, experiment: Experiment):
             "Nearly Flawless: Just one tiny step away from perfection.": 0.997,
             "The Pinnacle: As good as it can possibly be. The epitome of culinary delight.": 1.00
         }
-        options = sorted(rating_dict.keys(), key=lambda k: rating_dict[k])
-        rating_choice = st.select_slider('Please select the rating that best matches your thoughts.',
-                                         format_func=lambda s: s.split(':')[0],
-                                         options=options,
-                                         key=f"rate_{ref_id}_{trial_id}")
-        st.markdown(f"### _{rating_choice}_")
-        rating = rating_dict[rating_choice]
+        first_level = {
+            'Bad': (0., 0.694),
+            'Okay': (0.509, 0.852),
+            'Good': (0.759, 0.931),
+            'Impressive': (0.884, 0.970),
+            'Distinctive': (0.947, 0.990),
+            'Perfection': (0.978, 1.),
+        }
+        first_level = st.radio("How would you categorise it?",
+                               ['Please Choose'] + list(first_level.keys())
+                               )
+        if first_level != 'Please Choose':
+            options = list(filter(
+                lambda k: first_level[first_level][0] <= rating_dict[k] <= first_level[first_level][1],
+                sorted(rating_dict.keys(), key=lambda k: rating_dict[k])
+            ))
+            rating_choice = st.select_slider('Please select the rating that best matches your thoughts.',
+                                             format_func=lambda s: s.split(':')[0],
+                                             options=options,
+                                             key=f"rate_{ref_id}_{trial_id}")
+
+            st.markdown(f"### _{rating_choice}_")
+            rating = rating_dict[rating_choice]
     elif experiment.rating_system == '5 star system':
         rating = st.slider('How many stars would you rate this out of 5?',
                            min_value=1.,
@@ -602,7 +618,9 @@ def ask_rating(ref_id: str, trial_id: str, experiment: Experiment):
     else:
         st.error("Unable to record rating. Please contact whoever gave your this rating code.")
         return
-    if st.button("Submit rating", key=f"submit_rating_{ref_id}_{trial_id}"):
+
+    if st.button("Submit rating", key=f"submit_rating_{ref_id}_{trial_id}",
+                 disabled=f"rate_{ref_id}_{trial_id}" not in st.session_state):
         # Get experiment, and store trial update
         bo_experiment = BayesianOptimisation(experiment=experiment.opt_experiment)
         bo_experiment.post_measurement(
