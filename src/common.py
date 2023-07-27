@@ -586,7 +586,9 @@ def ask_rating(ref_id: str, trial_id: str, experiment: Experiment):
         }
 
         first_choice = st.selectbox("How would you categorise it?",
-                                    list(first_level.keys()),
+                                    index=0,
+                                    options=['Please Choose']+list(first_level.keys()),
+                                    placeholder='Please select a category',
                                     key='first_choice_culinary'
                                     )
         if first_choice is not None:
@@ -595,11 +597,8 @@ def ask_rating(ref_id: str, trial_id: str, experiment: Experiment):
                 sorted(rating_dict.keys(), key=lambda k: rating_dict[k])
             ))
             rating_choice = st.radio('Please select the rating that best matches your thoughts.',
-                                     format_func=lambda s: s.split(':')[0],
                                      options=options,
                                      key=f"rate_{ref_id}_{trial_id}")
-
-            st.markdown(f"### _{rating_choice}_")
             rating = rating_dict[rating_choice]
     elif experiment.rating_system == '5 star system':
         rating = st.slider('How many stars would you rate this out of 5?',
