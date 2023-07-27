@@ -554,33 +554,34 @@ def trial_section(experiment: Experiment):
 def ask_rating(ref_id: str, trial_id: str, experiment: Experiment):
     if experiment.rating_system == 'culinary system':
         rating_dict = {
-            "Dreadful (0%): Absolutely inedible, you regret even trying it.": 0.01,
-            "Terrible (18%): It leaves a bad taste in your mouth, figuratively and literally.": 0.216,
-            "Poor (31%): It disappoints your tastebuds. A real letdown.": 0.379,
-            "Subpar (41%): Unimpressive, it doesn't meet your expectations.": 0.509,
-            "Mediocre (49%): Just okay, half of what you've tried is worse, half is better.": 0.612,
-            "Acceptable (56%): It's alright, a satisfactory taste experience.": 0.694,
-            "Fair (63%): Not bad at all, you can appreciate some aspects.": 0.759,
-            "Good (68%): Pleasant, it has some commendable features.": 0.810,
-            "Quite Good (73%): It impresses, you enjoy it more than you expected.": 0.852,
-            "Very Good (77%): A tasty delight that leaves a positive impression.": 0.884,
-            "Excellent (81%): Memorable for its taste, you're happily satisfied.": 0.910,
-            "Impressive (84%): Beyond expectations, you'd happily have it again.": 0.931,
-            "Superb (87%): A cut above, it's a real treat for your palate.": 0.947,
-            "Outstanding (89%): Exceptional taste, you're already craving more.": 0.960,
-            "Exquisite (91%): A stellar taste experience, you're running out of compliments.": 0.970,
-            "Distinguished (94%): Deserves high praise for its superior taste.": 0.978,
-            "Magnificent (95%) A flawless blend of flavors. Truly impressive.": 0.985,
-            "Extraordinary (97%): A culinary masterpiece, it's tantalizingly close to perfect.": 0.990,
-            "Almost Perfect (98%): So delicious it's hard to believe it's not perfect.": 0.994,
-            "Nearly Flawless (99%): Just one tiny step away from perfection.": 0.997,
-            "The Pinnacle (100%): As good as it can possibly be. The epitome of culinary delight.": 1.00
+            "Dreadful: Absolutely inedible, you regret even trying it.": 0.01,
+            "Terrible: It leaves a bad taste in your mouth, figuratively and literally.": 0.216,
+            "Poor: It disappoints your tastebuds. A real letdown.": 0.379,
+            "Subpar: Unimpressive, it doesn't meet your expectations.": 0.509,
+            "Mediocre: Just okay, half of what you've tried is worse, half is better.": 0.612,
+            "Acceptable: It's alright, a satisfactory taste experience.": 0.694,
+            "Fair: Not bad at all, you can appreciate some aspects.": 0.759,
+            "Good: Pleasant, it has some commendable features.": 0.810,
+            "Quite Good: It impresses, you enjoy it more than you expected.": 0.852,
+            "Very Good: A tasty delight that leaves a positive impression.": 0.884,
+            "Excellent: Memorable for its taste, you're happily satisfied.": 0.910,
+            "Impressive: Beyond expectations, you'd happily have it again.": 0.931,
+            "Superb: A cut above, it's a real treat for your palate.": 0.947,
+            "Outstanding: Exceptional taste, you're already craving more.": 0.960,
+            "Exquisite: A stellar taste experience, you're running out of compliments.": 0.970,
+            "Distinguished: Deserves high praise for its superior taste.": 0.978,
+            "Magnificent: A flawless blend of flavors. Truly impressive.": 0.985,
+            "Extraordinary: A culinary masterpiece, it's tantalizingly close to perfect.": 0.990,
+            "Almost Perfect: So delicious it's hard to believe it's not perfect.": 0.994,
+            "Nearly Flawless: Just one tiny step away from perfection.": 0.997,
+            "The Pinnacle: As good as it can possibly be. The epitome of culinary delight.": 1.00
         }
         options = sorted(rating_dict.keys(), key=lambda k: rating_dict[k])
         rating_choice = st.select_slider('Please select the rating that best matches your thoughts.',
-                                         format_func=lambda s: s[:5],
+                                         format_func=lambda s: s.split(':')[0],
                                          options=options,
                                          key=f"rate_{ref_id}_{trial_id}")
+        st.text(rating_choice)
         rating = rating_dict[rating_choice]
     elif experiment.rating_system == '5 star system':
         rating = st.slider('How many stars would you rate this out of 5?',
