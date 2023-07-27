@@ -584,12 +584,12 @@ def ask_rating(ref_id: str, trial_id: str, experiment: Experiment):
             'Distinctive': (0.947, 0.990),
             'Perfection': (0.978, 1.),
         }
-        first_level = st.radio("How would you categorise it?",
-                               ['Please Choose'] + list(first_level.keys())
-                               )
-        if first_level != 'Please Choose':
+        first_choice = st.radio("How would you categorise it?",
+                                ['Please Choose'] + list(first_level.keys())
+                                )
+        if first_choice != 'Please Choose':
             options = list(filter(
-                lambda k: first_level[first_level][0] <= rating_dict[k] <= first_level[first_level][1],
+                lambda k: first_level[first_choice][0] <= rating_dict[k] <= first_level[first_choice][1],
                 sorted(rating_dict.keys(), key=lambda k: rating_dict[k])
             ))
             rating_choice = st.select_slider('Please select the rating that best matches your thoughts.',
