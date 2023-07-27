@@ -284,6 +284,8 @@ def new_experiment(account: str):
         illegal_value = -1
     elif rating_system == 'Percent System':
         illegal_value = -10
+    elif rating_system == 'Culinary System':
+        illegal_value = -0.1
     else:
         raise ValueError(f'invalid rating system {rating_system}')
     num_params = st.number_input(label='Number of Parameters', min_value=1, max_value=10, step=1,
