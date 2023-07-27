@@ -581,7 +581,7 @@ def ask_rating(ref_id: str, trial_id: str, experiment: Experiment):
                                          format_func=lambda s: s.split(':')[0],
                                          options=options,
                                          key=f"rate_{ref_id}_{trial_id}")
-        st.text(rating_choice)
+        st.markdown(f"### _{rating_choice}_")
         rating = rating_dict[rating_choice]
     elif experiment.rating_system == '5 star system':
         rating = st.slider('How many stars would you rate this out of 5?',
