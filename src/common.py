@@ -8,6 +8,7 @@ from uuid import uuid4
 import streamlit as st
 from bojaxns import OptimisationExperiment, Parameter, ContinuousPrior, IntegerPrior, CategoricalPrior, ParameterSpace, \
     NewExperimentRequest, BayesianOptimisation, TrialUpdate
+from bojaxns.common import FloatValue, IntValue
 from bojaxns.gaussian_process_formulation.distribution_math import NotEnoughData
 from jax import random
 from jax._src.random import PRNGKey
@@ -346,7 +347,7 @@ def new_experiment(account: str):
         param = Parameter(name=param_name, prior=prior)
         parameters.append(param)
 
-    if st.button('Create New Experiment'):
+    if st.button('Create New Experiment', key=f"create_experiment"):
         parameter_space = ParameterSpace(parameters=parameters)
         new_experiment_request = NewExperimentRequest(
             parameter_space=parameter_space,
@@ -536,61 +537,75 @@ def get_random_key():
 
 
 def trial_section(experiment: Experiment):
-    st.markdown('### Search')
+    st.markdown('### New Trial')
     key_seed = st.number_input('What is your favourite number?', min_value=0, max_value=2 ** 32 - 1, step=1, value=42,
                                help='Use to seed the random number generator.')
     if 'random_prngkey' not in st.session_state:
         st.session_state['random_prngkey'] = random.PRNGKey(key_seed)
-    exploration = st.slider('Exploration/Exploitation', min_value=0., max_value=1., value=1., key='explore_beta',
-                            help='The closer to one, the more you will explore uncharted territory. '
-                                 'The closer to zero, the more you will stop exploring and try to find the best. '
-                                 'It is recommended to explore as long as possible, before starting to exploit.')
-    random_explore = st.checkbox("I'm feeling lucky!", value=False, key='random_explore',
-                                 help="If true, then you'll explore with a shot in the dark. "
-                                      "Don't worry if you don't like your suggestion, "
-                                      "you can delete it later and try again.")
-    if st.button('Suggest next trial', key='create_trial',
-                 help='This will use all your past data to suggest the next best parameter setting to try.'):
-        try:
-            new_trial(key=get_random_key(), experiment=experiment, beta=exploration,
-                      random_explore=random_explore)
-        except NotEnoughData:
-            st.info("You need more complete trials before we can learn structure in the data. "
-                    "Use 'I'm feeling lucky!' to get another randomised trial.")
-    add_trial_data = st.checkbox("Add trial from data",
-                                 help='Use this to add a new trial from data, '
-                                      'e.g. if you deviated from a trial parameter setting, '
-                                      'then you should use this to create a trial at the actual applied values.')
-    if add_trial_data:
+    trial_type = st.radio('How would you like to create the trial?',
+                          options=["I'm feeling lucky!",
+                                   "Add from my own data.",
+                                   "Use cool math and suggest me one."],
+                          key=f'trial_type_{experiment.experiment_id}')
+    if trial_type == "I'm feeling lucky!":
+        st.info("Use this to generate a randomised trial.")
+        if st.button('Get next trial', key=f'create_trial_{experiment.experiment_id}',
+                     help='This will choose a random next trial, hope you are feeling lucky.'):
+            try:
+                new_trial(key=get_random_key(), experiment=experiment, beta=0.5,
+                          random_explore=True)
+            except NotEnoughData:
+                st.info("You need more complete trials before we can learn structure in the data. "
+                        "Use 'I'm feeling lucky!' to get another randomised trial.")
+    elif trial_type == "Use cool math and suggest me one.":
+        exploration = st.slider('Exploration/Exploitation', min_value=0., max_value=1., value=1.,
+                                key=f'explore_beta_{experiment.experiment_id}',
+                                help='The closer to one, the more you will explore uncharted territory. '
+                                     'The closer to zero, the more you will stop exploring and try to find the best. '
+                                     'It is recommended to explore as long as possible, before starting to exploit.')
+        if st.button('Get next trial', key=f'create_trial_{experiment.experiment_id}',
+                     help='This will use all your past data to suggest the next best parameter setting to try.'):
+            try:
+                new_trial(key=get_random_key(), experiment=experiment, beta=exploration,
+                          random_explore=False)
+            except NotEnoughData:
+                st.info("You need more complete trials before we can learn structure in the data. "
+                        "Use 'I'm feeling lucky!' to get another randomised trial.")
+    elif trial_type == "Add from my own data.":
+        st.info('You can use this to add a trial from data, '
+                'e.g. if you deviated from a trial parameter setting, '
+                'then you should use this to create a trial at the actual applied values.')
         param_values = dict()
         for i, param in enumerate(experiment.opt_experiment.parameter_space.parameters):
             prior = param.prior
-            st.subheader(f'Select trial parameter values')
 
             if isinstance(prior, ContinuousPrior):
-                val = st.number_input(label=param.name, value=prior.mode, min_value=prior.lower,
+                val = st.number_input(label=param.name, value=prior.lower, min_value=prior.lower,
                                       max_value=prior.upper,
                                       step=(prior.upper - prior.lower) / 100,
-                                      key=f'manual_param_val_{i}')
+                                      key=f'manual_param_val_{i}_{experiment.experiment_id}')
+                val = FloatValue(value=val)
             elif isinstance(prior, IntegerPrior):
-                val = st.number_input(label=param.name, value=int(prior.mode), min_value=int(prior.lower),
+                val = st.number_input(label=param.name, value=int(prior.lower), min_value=int(prior.lower),
                                       max_value=int(prior.upper),
                                       step=1,
-                                      key=f'manual_param_val_{i}')
+                                      key=f'manual_param_val_{i}_{experiment.experiment_id}')
+                val = IntValue(value=val)
             elif isinstance(prior, CategoricalPrior):
                 val = st.number_input(label=param.name, value=0, min_value=0,
                                       max_value=len(prior.probs) - 1,
                                       step=1,
-                                      key=f'manual_param_val_{i}',
+                                      key=f'manual_param_val_{i}_{experiment.experiment_id}',
                                       help='Category index starts at 0 and goes to N-1, '
                                            'where N is the number of categories.')
+                val = IntValue(value=val)
             else:
                 raise ValueError(f"Invalid prior: {prior}")
             param_values[param.name] = val
-            if st.button("Add trial data"):
-                bo_experiment = BayesianOptimisation(experiment=experiment.opt_experiment)
-                trial_id = bo_experiment.add_trial_from_data(key=get_random_key(), param_values=param_values)
-                st.info(f"Create new trial {trial_id}, which you may now add rating data to.")
+        if st.button("Add trial data", key=f'add_trial_data_{experiment.experiment_id}'):
+            bo_experiment = BayesianOptimisation(experiment=experiment.opt_experiment)
+            trial_id = bo_experiment.add_trial_from_data(key=get_random_key(), param_values=param_values)
+            st.info(f"Create new trial {trial_id}, which you may now add rating data to.")
 
     st.markdown('### Trials')
     display_trials(experiment=experiment)
@@ -635,7 +650,7 @@ def ask_rating(ref_id: str, trial_id: str, experiment: Experiment):
                                     options=[''] + list(first_level.keys()),
                                     placeholder='Please select a category',
                                     format_func=lambda x: 'Select an option' if x == '' else x,
-                                    key='first_choice_culinary'
+                                    key=f'first_choice_culinary_{experiment.experiment_id}'
                                     )
         if first_choice:
             options = list(filter(
