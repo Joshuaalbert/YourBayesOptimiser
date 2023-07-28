@@ -650,7 +650,7 @@ def ask_rating(ref_id: str, trial_id: str, experiment: Experiment):
                                     options=[''] + list(first_level.keys()),
                                     placeholder='Please select a category',
                                     format_func=lambda x: 'Select an option' if x == '' else x,
-                                    key=f'first_choice_culinary_{experiment.experiment_id}'
+                                    key=f'first_choice_culinary_{ref_id}_{trial_id}'
                                     )
         if first_choice:
             options = list(filter(
@@ -692,7 +692,7 @@ def ask_rating(ref_id: str, trial_id: str, experiment: Experiment):
             trial_update=TrialUpdate(ref_id=ref_id, objective_measurement=rating)
         )
         store_experiment(experiment=experiment)
-        st.info(f"Thank you for your rating!")
+        st.info(f"Thank you for your rating! Clear your access code if this is a shared computer.")
 
 
 def rate_batch(access_code: str):

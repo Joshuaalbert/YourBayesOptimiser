@@ -12,7 +12,11 @@ logging.basicConfig(level=logging.INFO)
 def main():
     accounts = dict(map(lambda ac: ac.split(':')[::-1], st.secrets['accounts'].split(' ')))
 
-    access_code = st.text_input('Access Code', type='password', help='You need an access code to enter.')
+    access_code = st.text_input('Access Code',
+                                value='',
+                                type='password',
+                                help='You need an access code to enter.',
+                                key='access_key')
 
     if access_code.startswith('rate'):
         # recipe feedback
