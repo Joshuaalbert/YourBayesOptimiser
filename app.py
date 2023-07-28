@@ -16,6 +16,7 @@ def main():
 
     if access_code.startswith('rate'):
         # recipe feedback
+        access_code = f"rate{access_code[4:].upper()}"
         rate_batch(access_code=access_code)
     else:
         if access_code not in accounts:
