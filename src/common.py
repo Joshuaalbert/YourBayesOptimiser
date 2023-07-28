@@ -526,10 +526,21 @@ def display_trials(experiment: Experiment):
             st.markdown(s)
 
 
+def get_random_key():
+    if 'random_prngkey' not in st.session_state:
+        return random.PRNGKey(42)
+    key = st.session_state['random_prngkey']
+    key, next_key = random.split(key, 2)
+    st.session_state['random_prngkey'] = key
+    return next_key
+
+
 def trial_section(experiment: Experiment):
     st.markdown('### Search')
     key_seed = st.number_input('What is your favourite number?', min_value=0, max_value=2 ** 32 - 1, step=1, value=42,
                                help='Use to seed the random number generator.')
+    if 'random_prngkey' not in st.session_state:
+        st.session_state['random_prngkey'] = random.PRNGKey(key_seed)
     exploration = st.slider('Exploration/Exploitation', min_value=0., max_value=1., value=1., key='explore_beta',
                             help='The closer to one, the more you will explore uncharted territory. '
                                  'The closer to zero, the more you will stop exploring and try to find the best. '
@@ -538,15 +549,49 @@ def trial_section(experiment: Experiment):
                                  help="If true, then you'll explore with a shot in the dark. "
                                       "Don't worry if you don't like your suggestion, "
                                       "you can delete it later and try again.")
-    key = random.PRNGKey(key_seed)
     if st.button('Suggest next trial', key='create_trial',
                  help='This will use all your past data to suggest the next best parameter setting to try.'):
         try:
-            new_trial(key=key, experiment=experiment, beta=exploration,
+            new_trial(key=get_random_key(), experiment=experiment, beta=exploration,
                       random_explore=random_explore)
         except NotEnoughData:
             st.info("You need more complete trials before we can learn structure in the data. "
                     "Use 'I'm feeling lucky!' to get another randomised trial.")
+    add_trial_data = st.checkbox("Add trial from data",
+                                 help='Use this to add a new trial from data, '
+                                      'e.g. if you deviated from a trial parameter setting, '
+                                      'then you should use this to create a trial at the actual applied values.')
+    if add_trial_data:
+        param_values = dict()
+        for i, param in enumerate(experiment.opt_experiment.parameter_space.parameters):
+            prior = param.prior
+            st.subheader(f'Select trial parameter values')
+
+            if isinstance(prior, ContinuousPrior):
+                val = st.number_input(label=param.name, value=prior.mode, min_value=prior.lower,
+                                      max_value=prior.upper,
+                                      step=(prior.upper - prior.lower) / 100,
+                                      key=f'manual_param_val_{i}')
+            elif isinstance(prior, IntegerPrior):
+                val = st.number_input(label=param.name, value=int(prior.mode), min_value=int(prior.lower),
+                                      max_value=int(prior.upper),
+                                      step=1,
+                                      key=f'manual_param_val_{i}')
+            elif isinstance(prior, CategoricalPrior):
+                val = st.number_input(label=param.name, value=0, min_value=0,
+                                      max_value=len(prior.probs) - 1,
+                                      step=1,
+                                      key=f'manual_param_val_{i}',
+                                      help='Category index starts at 0 and goes to N-1, '
+                                           'where N is the number of categories.')
+            else:
+                raise ValueError(f"Invalid prior: {prior}")
+            param_values[param.name] = val
+            if st.button("Add trial data"):
+                bo_experiment = BayesianOptimisation(experiment=experiment.opt_experiment)
+                trial_id = bo_experiment.add_trial_from_data(key=get_random_key(), param_values=param_values)
+                st.info(f"Create new trial {trial_id}, which you may now add rating data to.")
+
     st.markdown('### Trials')
     display_trials(experiment=experiment)
 
@@ -587,7 +632,7 @@ def ask_rating(ref_id: str, trial_id: str, experiment: Experiment):
 
         first_choice = st.selectbox("How would you categorise it?",
                                     index=0,
-                                    options=['']+list(first_level.keys()),
+                                    options=[''] + list(first_level.keys()),
                                     placeholder='Please select a category',
                                     format_func=lambda x: 'Select an option' if x == '' else x,
                                     key='first_choice_culinary'
@@ -601,6 +646,8 @@ def ask_rating(ref_id: str, trial_id: str, experiment: Experiment):
                                      options=options,
                                      key=f"rate_{ref_id}_{trial_id}")
             rating = rating_dict[rating_choice]
+        else:
+            return
     elif experiment.rating_system == '5 star system':
         rating = st.slider('How many stars would you rate this out of 5?',
                            min_value=1.,
