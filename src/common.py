@@ -605,6 +605,7 @@ def trial_section(experiment: Experiment):
         if st.button("Add trial data", key=f'add_trial_data_{experiment.experiment_id}'):
             bo_experiment = BayesianOptimisation(experiment=experiment.opt_experiment)
             trial_id = bo_experiment.add_trial_from_data(key=get_random_key(), param_values=param_values)
+            store_experiment(experiment=experiment)
             st.info(f"Create new trial {trial_id}, which you may now add rating data to.")
 
     st.markdown('### Trials')
