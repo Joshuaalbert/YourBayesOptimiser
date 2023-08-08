@@ -1,15 +1,12 @@
-import logging
-
 import streamlit as st
 from bojaxns import BayesianOptimisation
 
 from src.common import load_experiment, new_experiment, save_experiment, Experiment, display_parameter_space, \
     trial_section
+from src.interfaces import ABInterface
 
-logger = logging.getLogger('ray')
 
-
-def run_general(account: str):
+def run_general(account: str, ab_interface: ABInterface|None = None):
     # Load Experiment
     with st.sidebar.expander("Load Experiment"):
         load_experiment(account=account)
@@ -20,7 +17,8 @@ def run_general(account: str):
 
     if 'experiment' in st.session_state:
         if st.sidebar.button('Save Experiment') and ('experiment' in st.session_state):
-            save_experiment(account=account, save_file='experiment_state.json', experiment=st.session_state['experiment'])
+            save_experiment(account=account, save_file='experiment_state.json',
+                            experiment=st.session_state['experiment'])
 
     if 'experiment' not in st.session_state:
         st.info('Please load an experiment to proceed.')
@@ -32,7 +30,7 @@ def run_general(account: str):
     with st.expander('Search Space'):
         display_parameter_space(parameter_space=experiment.opt_experiment.parameter_space)
 
-    trial_section(experiment=experiment)
+    trial_section(experiment=experiment, ab_interface=ab_interface)
 
     try:
         bo_experiment = BayesianOptimisation(experiment=experiment.opt_experiment)

@@ -13,3 +13,5 @@ mctx
 pyDOE2
 matplotlib
 etils
+aiohttp
+pandas

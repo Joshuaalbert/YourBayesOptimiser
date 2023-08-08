@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import string
 from datetime import datetime
@@ -5,9 +6,10 @@ from random import choice
 from typing import List, Dict, Literal
 from uuid import uuid4
 
+import pandas as pd
 import streamlit as st
 from bojaxns import OptimisationExperiment, Parameter, ContinuousPrior, IntegerPrior, CategoricalPrior, ParameterSpace, \
-    NewExperimentRequest, BayesianOptimisation, TrialUpdate
+    NewExperimentRequest, BayesianOptimisation, TrialUpdate, Trial
 from bojaxns.common import FloatValue, IntValue
 from bojaxns.gaussian_process_formulation.distribution_math import NotEnoughData
 from jax import random
@@ -15,6 +17,7 @@ from jax._src.random import PRNGKey
 from pydantic import BaseModel, Field
 
 from src.experiment_repo import S3Bucket, S3Interface
+from src.interfaces import ABInterface, ParameterRequest, PushRequest, PullResponse, NoTrialSet
 
 
 def bytes_to_str(b):
@@ -430,7 +433,7 @@ def new_trial(key: PRNGKey, experiment: Experiment, beta: float, random_explore:
     store_experiment(experiment=experiment)
 
 
-def display_trials(experiment: Experiment):
+def display_trials(experiment: Experiment, ab_interface: ABInterface | None = None):
     opt_experiment = experiment.opt_experiment
     for trial_id in sorted(opt_experiment.trials, key=lambda ti: opt_experiment.trials[ti].create_dt):
         trial = opt_experiment.trials[trial_id]
@@ -446,10 +449,16 @@ def display_trials(experiment: Experiment):
                               options=["I want to delete this trial.",
                                        "I would like to generate a rater code.",
                                        "I would like to provide my own rating.",
-                                       "I would like to mark this trial as illegal."
+                                       "I would like to mark this trial as illegal.",
+                                       "I would like to push to AB client."
                                        ],
                               key=f'action_{trial_id}')
-            if action == "I want to delete this trial.":
+            if action == "I would like to push to AB client.":
+                if ab_interface is not None:
+                    push_ab_trial(trial=trial, ab_interface=ab_interface)
+                else:
+                    st.info("You do not have an AB client attached to your account.")
+            elif action == "I want to delete this trial.":
                 if st.button("Delete Trial", key=f'delete_trial_{trial_id}'):
                     bo_experiment.delete_trial(trial_id=trial_id)
                     store_experiment(experiment=experiment)
@@ -536,7 +545,33 @@ def get_random_key():
     return next_key
 
 
-def trial_section(experiment: Experiment):
+def trial_section(experiment: Experiment, ab_interface: ABInterface | None = None):
+    if ab_interface is not None:
+        st.markdown("### Pull data from AB client")
+        pull_ab_data(experiment=experiment, ab_interface=ab_interface)
+        if 'pull_response' in st.session_state:
+            pull_response: PullResponse = st.session_state['pull_response']
+            s = "#### Current AB client parameter setting\n"
+            for parameter_response in pull_response.current_parameters:
+                s += f"* `{parameter_response.name}` = {parameter_response.current_value} in trial {parameter_response.current_trial_id} (last updated {parameter_response.updated_at})\n"
+            st.markdown(s)
+            s = "#### User observations\n"
+            # Convert data to DataFrame
+            rows = []
+            for user_observation in pull_response.user_observations:
+                user_id = user_observation.user_id
+                trial_id = user_observation.trial_id
+                for observable in user_observation.observables:
+                    parameter_id = observable.parameter_id
+                    observable_value = observable.observable
+                    rows.append([user_id, trial_id, parameter_id, observable_value])
+            df = pd.DataFrame(rows, columns=["user_id", "trial_id", "parameter_id", "observable"])
+            pivot_df = df.pivot_table(index=["user_id", "trial_id"],
+                                      columns="parameter_id",
+                                      values="observable",
+                                      aggfunc='first').reset_index()
+            st.dataframe(pivot_df)
+
     st.markdown('### New Trial')
     key_seed = st.number_input('What is your favourite number?', min_value=0, max_value=2 ** 32 - 1, step=1, value=42,
                                help='Use to seed the random number generator.')
@@ -609,7 +644,7 @@ def trial_section(experiment: Experiment):
             st.info(f"Create new trial {trial_id}, which you may now add rating data to.")
 
     st.markdown('### Trials')
-    display_trials(experiment=experiment)
+    display_trials(experiment=experiment, ab_interface=ab_interface)
 
 
 def ask_rating(ref_id: str, trial_id: str, experiment: Experiment):
@@ -715,3 +750,39 @@ def rate_batch(access_code: str):
         st.image(str_to_bytes(batch_meta.image), caption=batch_meta.name)
     ask_rating(ref_id=access_code, trial_id=feedback_ref.trial_id,
                experiment=experiment)
+
+
+def push_ab_trial(trial: Trial, ab_interface: ABInterface):
+    trial_id = trial.trial_id
+    if st.button("Push AB Trial", key=f'push_trial_{trial_id}'):
+        parameters = []
+        for name, value in trial.param_values.items():
+            parameters.append(ParameterRequest(parameter_name=name, value=value.value))
+        push_request = PushRequest(trial_id=trial_id, parameters=parameters)
+        asyncio.run(ab_interface.push_new_trial(push_request=push_request))
+
+
+def pull_ab_data(experiment: Experiment, ab_interface: ABInterface):
+    if st.button('Pull AB Data'):
+        # pull from client
+        try:
+            pull_response: PullResponse = asyncio.run(ab_interface.pull_observable_data())
+            bo_experiment = BayesianOptimisation(experiment=experiment.opt_experiment)
+            for user_observation in pull_response.user_observations:
+                objective_value = 0.
+                for observable in user_observation.observables:
+                    objective_value += observable.observable
+
+                trial_update = TrialUpdate(
+                    ref_id=user_observation.user_id,
+                    objective_measurement=objective_value
+                )
+                bo_experiment.post_measurement(trial_id=user_observation.trial_id,
+                                               trial_update=trial_update)
+                store_experiment(experiment=experiment)
+
+            if 'pull_response' in st.session_state:
+                del st.session_state['pull_response']
+            st.session_state['pull_response'] = pull_response
+        except NoTrialSet as e:
+            st.info(f"No trial is currently set for `{e.name}`.")
