@@ -84,7 +84,7 @@ class ParameterResponse(BaseModel):
 
 
 class ObservableResponse(BaseModel):
-    parameter_id: str = Field(
+    observable_name: str = Field(
         description="A unique id of the parameter that this observation is for.",
         example='is_subscribed'
     )

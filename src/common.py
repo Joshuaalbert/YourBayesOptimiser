@@ -47,7 +47,7 @@ class ParameterResponse(BaseModel):
 
 
 class ObservableResponse(BaseModel):
-    parameter_id: str
+    observable_name: str
     observable: float | int
 
 
@@ -576,12 +576,12 @@ def trial_section(experiment: Experiment, ab_interface: ABInterface | None = Non
                 user_id = user_observation.user_id
                 trial_id = user_observation.trial_id
                 for observable in user_observation.observables:
-                    parameter_id = observable.parameter_id
+                    observable_name = observable.observable_name
                     observable_value = observable.observable
-                    rows.append([user_id, trial_id, parameter_id, observable_value])
-            df = pd.DataFrame(rows, columns=["user_id", "trial_id", "parameter_id", "observable"])
+                    rows.append([user_id, trial_id, observable_name, observable_value])
+            df = pd.DataFrame(rows, columns=["user_id", "trial_id", "observable_name", "observable"])
             pivot_df = df.pivot_table(index=["user_id", "trial_id"],
-                                      columns="parameter_id",
+                                      columns="observable_name",
                                       values="observable",
                                       aggfunc='first').reset_index()
             st.dataframe(pivot_df)
@@ -832,7 +832,7 @@ def update_experiment_trial_scores(experiment: Experiment, observables_list: Lis
         ref_id = observable_response.user_id
         variables = dict()
         for resp in observable_response.observables:
-            variables[resp.parameter_id] = resp.observable
+            variables[resp.observable_name] = resp.observable
         try:
             score = f(**variables)
         except Exception as e:

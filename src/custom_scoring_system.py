@@ -29,5 +29,5 @@ def get_all_observables(observables_list: List[UserObservableResponse]):
     all_observables = set()
     for observables in observables_list:
         for observable_resp in observables.observables:
-            all_observables.add(observable_resp.parameter_id)
+            all_observables.add(observable_resp.observable_name)
     return all_observables

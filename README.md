@@ -232,7 +232,7 @@ Returns an array of `UserObservableResponse` as data.
       "description": "A list of observables for this user.",
       "example": [
         {
-          "parameter_id": "is_subscribed",
+          "observable_name": "is_subscribed",
           "observable": 1.0
         }
       ],
@@ -252,7 +252,7 @@ Returns an array of `UserObservableResponse` as data.
       "title": "ObservableResponse",
       "type": "object",
       "properties": {
-        "parameter_id": {
+        "observable_name": {
           "title": "Parameter Id",
           "description": "A unique id of the parameter that this observation is for.",
           "example": "is_subscribed",
@@ -273,7 +273,7 @@ Returns an array of `UserObservableResponse` as data.
         }
       },
       "required": [
-        "parameter_id",
+        "observable_name",
         "observable"
       ]
     }
@@ -296,7 +296,7 @@ This is an example of a response from the server, with a single element in array
     "trial_id": "30c6648d-2d50-4759-a44b-d9640642cd3d",
     "observables": [
       {
-        "parameter_id": "is_subscribed",
+        "observable_name": "is_subscribed",
         "observable": 1.0
       }
     ]
