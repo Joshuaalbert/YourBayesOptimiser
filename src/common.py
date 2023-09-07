@@ -769,7 +769,10 @@ def pull_ab_data(experiment: Experiment, ab_interface: ABInterface):
     if st.button('Pull AB Data'):
         # pull from client
         try:
-            pull_response: PullResponse = asyncio.run(ab_interface.pull_observable_data())
+            try:
+                pull_response: PullResponse = asyncio.run(ab_interface.pull_observable_data())
+            except APIError as e:
+                st.error(str(e))
             bo_experiment = BayesianOptimisation(experiment=experiment.opt_experiment)
             for user_observation in pull_response.user_observations:
                 objective_value = 0.
