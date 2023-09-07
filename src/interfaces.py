@@ -6,7 +6,8 @@ from typing import List, Type, TypeVar, Dict, Any
 from uuid import uuid4
 
 import aiohttp
-from pydantic import ValidationError, BaseModel, Field
+import streamlit as st
+from pydantic import BaseModel, Field
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('ray')
@@ -207,6 +208,7 @@ class ABInterface:
                     raise APIError(f"Failed to get current parameters {await response.text()} Code {status}.")
                 else:
                     resp_json = await response.json()
+                    st.write(resp_json)
                     current_parameters = []
                     for _resp in resp_json:
                         current_parameters.append(ParameterResponse.parse_obj(_resp))
@@ -217,7 +219,9 @@ class ABInterface:
                     raise APIError(f"Failed to get observations {await response.text()} Code {status}.")
                 else:
                     user_observations: List[UserObservableResponse] = []
-                    for inner_array in (await response.json()):
+                    resp_json = await response.json()
+                    st.write(resp_json)
+                    for inner_array in resp_json:
                         user_observations.extend(map(UserObservableResponse.parse_obj, inner_array))
         return PullResponse(
             current_parameters=current_parameters,
