@@ -209,6 +209,7 @@ class ABInterface:
                 else:
                     resp_json = await response.json()
                     st.write(resp_json)
+                    st.write(type(resp_json[0]))
                     current_parameters = []
                     for _resp in resp_json:
                         current_parameters.append(ParameterResponse.parse_obj(_resp))
@@ -221,6 +222,7 @@ class ABInterface:
                     user_observations: List[UserObservableResponse] = []
                     resp_json = await response.json()
                     st.write(resp_json)
+                    st.write(resp_json[0])
                     for inner_array in resp_json:
                         user_observations.extend(map(UserObservableResponse.parse_obj, inner_array))
         return PullResponse(
