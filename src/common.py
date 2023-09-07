@@ -14,7 +14,7 @@ from bojaxns.common import FloatValue, IntValue
 from bojaxns.gaussian_process_formulation.distribution_math import NotEnoughData
 from jax import random
 from jax._src.random import PRNGKey
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from src.experiment_repo import S3Bucket, S3Interface
 from src.interfaces import ABInterface, ParameterRequest, PushRequest, PullResponse, NoTrialSet, APIError
@@ -761,8 +761,9 @@ def push_ab_trial(trial: Trial, ab_interface: ABInterface):
         push_request = PushRequest(trial_id=trial_id, parameters=parameters)
         try:
             asyncio.run(ab_interface.push_new_trial(push_request=push_request))
-        except APIError as e:
+        except (APIError, ValidationError) as e:
             st.error(str(e))
+            return
 
 
 def pull_ab_data(experiment: Experiment, ab_interface: ABInterface):
@@ -771,8 +772,9 @@ def pull_ab_data(experiment: Experiment, ab_interface: ABInterface):
         try:
             try:
                 pull_response: PullResponse = asyncio.run(ab_interface.pull_observable_data())
-            except APIError as e:
+            except (APIError, ValidationError) as e:
                 st.error(str(e))
+                return
             bo_experiment = BayesianOptimisation(experiment=experiment.opt_experiment)
             for user_observation in pull_response.user_observations:
                 objective_value = 0.

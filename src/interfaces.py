@@ -157,6 +157,7 @@ class NoTrialSet(Exception):
 
 def test_examples():
     print(build_example(ParameterResponse).json(indent=2))
+    print(build_example(UserObservableResponse).json(indent=2))
 
 
 class ABInterface:
@@ -208,10 +209,7 @@ class ABInterface:
                     resp_json = await response.json()
                     current_parameters = []
                     for _resp in resp_json:
-                        try:
-                            current_parameters.append(ParameterResponse.parse_obj(_resp))
-                        except ValidationError:
-                            raise NoTrialSet(name=_resp['name'])
+                        current_parameters.append(ParameterResponse.parse_obj(_resp))
 
             async with session.get(f'{self.backend_url}/ab/observations') as response:
                 status = response.status
