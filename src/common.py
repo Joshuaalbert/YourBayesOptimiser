@@ -16,8 +16,10 @@ from jax import random
 from jax._src.random import PRNGKey
 from pydantic import BaseModel, Field, ValidationError
 
+from src.custom_scoring_system import get_all_observables, is_valid_expression, create_function
 from src.experiment_repo import S3Bucket, S3Interface
-from src.interfaces import ABInterface, ParameterRequest, PushRequest, PullResponse, NoTrialSet, APIError
+from src.interfaces import ABInterface, ParameterRequest, PushRequest, NoTrialSet, APIError, \
+    PullParametersResponse, PullObservablesResponse
 
 
 def bytes_to_str(b):
@@ -159,7 +161,8 @@ def get_s3_bucket() -> S3Bucket:
     return S3Bucket(S3Interface(
         repo_name='app',
         aws_access_key_id=st.secrets['aws_access_key_id'],
-        aws_secret_access_key=st.secrets['aws_secret_access_key']
+        aws_secret_access_key=st.secrets['aws_secret_access_key'],
+        region='ca-central-1'
     ))
 
 
@@ -548,13 +551,24 @@ def get_random_key():
 def trial_section(experiment: Experiment, ab_interface: ABInterface | None = None):
     if ab_interface is not None:
         st.markdown("### Pull data from AB client")
-        pull_ab_data(experiment=experiment, ab_interface=ab_interface)
-        if 'pull_response' in st.session_state:
-            pull_response: PullResponse = st.session_state['pull_response']
-            s = "#### Current AB client parameter setting\n"
+        pull_ab_data(ab_interface=ab_interface)
+        if 'pull_parameters_response' in st.session_state:
+            pull_response: PullParametersResponse = st.session_state['pull_parameters_response']
+            info = '### Currently set parameters\n'
             for parameter_response in pull_response.current_parameters:
-                s += f"* `{parameter_response.name}` = {parameter_response.current_value} in trial {parameter_response.current_trial_id} (last updated {parameter_response.updated_at})\n"
-            st.markdown(s)
+                info += f"* `{parameter_response.name}` = {parameter_response.current_value} in trial {parameter_response.current_trial_id} (last updated {parameter_response.updated_at})\n"
+            st.markdown(info)
+        if 'pull_observables_response' in st.session_state:
+            pull_response: PullObservablesResponse = st.session_state['pull_observables_response']
+            allowed_variables = get_all_observables(observables_list=pull_response.user_observations)
+            st.markdown("### Scoring formula")
+            info = "#### Possible variables:"
+            for var in sorted(allowed_variables):
+                info += f"\n* `{var}`"
+            st.markdown(info)
+            expression = st.text_input("Scoring formula", value="",
+                                       key=f'expression_{experiment.experiment_id}',
+                                       help="The expression to compute score from available variables.")
             s = "#### User observations\n"
             # Convert data to DataFrame
             rows = []
@@ -571,6 +585,15 @@ def trial_section(experiment: Experiment, ab_interface: ABInterface | None = Non
                                       values="observable",
                                       aggfunc='first').reset_index()
             st.dataframe(pivot_df)
+            if st.button("Apply score function", key=f'apply_score_{experiment.experiment_id}',
+                         help="Apply the scoring function to the trials retrospectively."):
+                try:
+                    update_experiment_trial_scores(experiment=experiment,
+                                                   observables_list=pull_response.user_observations,
+                                                   expression=expression)
+                except InvalidExpressionError as e:
+                    st.error(e)
+                store_experiment(experiment=experiment)
 
     st.markdown('### New Trial')
     key_seed = st.number_input('What is your favourite number?', min_value=0, max_value=2 ** 32 - 1, step=1, value=42,
@@ -766,31 +789,54 @@ def push_ab_trial(trial: Trial, ab_interface: ABInterface):
             return
 
 
-def pull_ab_data(experiment: Experiment, ab_interface: ABInterface):
-    if st.button('Pull AB Data'):
+def pull_ab_data(ab_interface: ABInterface):
+    if st.button('Pull Client Parameters'):
         # pull from client
         try:
             try:
-                pull_response: PullResponse = asyncio.run(ab_interface.pull_observable_data())
-            except (APIError, ValidationError) as e:
+                pull_response: PullParametersResponse = asyncio.run(ab_interface.pull_parameter_data())
+            except (APIError, ValidationError, NoTrialSet) as e:
                 st.error(str(e))
                 return
-            bo_experiment = BayesianOptimisation(experiment=experiment.opt_experiment)
-            for user_observation in pull_response.user_observations:
-                objective_value = 0.
-                for observable in user_observation.observables:
-                    objective_value += observable.observable
-
-                trial_update = TrialUpdate(
-                    ref_id=user_observation.user_id,
-                    objective_measurement=objective_value
-                )
-                bo_experiment.post_measurement(trial_id=user_observation.trial_id,
-                                               trial_update=trial_update)
-                store_experiment(experiment=experiment)
-
-            if 'pull_response' in st.session_state:
-                del st.session_state['pull_response']
-            st.session_state['pull_response'] = pull_response
+            if 'pull_parameters_response' in st.session_state:
+                del st.session_state['pull_parameters_response']
+            st.session_state['pull_parameters_response'] = pull_response
         except NoTrialSet as e:
             st.info(f"No trial is currently set for `{e.name}`.")
+
+    if st.button('Pull Client Observables'):
+        # pull from client
+        try:
+            pull_response: PullObservablesResponse = asyncio.run(ab_interface.pull_observable_data())
+        except (APIError, ValidationError) as e:
+            st.error(str(e))
+            return
+        if 'pull_observables_response' in st.session_state:
+            del st.session_state['pull_observables_response']
+        st.session_state['pull_observables_response'] = pull_response
+
+
+class InvalidExpressionError(Exception):
+    pass
+
+
+def update_experiment_trial_scores(experiment: Experiment, observables_list: List[UserObservableResponse],
+                                   expression: str):
+    allowed_vars = get_all_observables(observables_list=observables_list)
+    if not is_valid_expression(expression=expression, allowed_vars=allowed_vars):
+        raise InvalidExpressionError(f"Invalid expression: {expression}")
+    f = create_function(expression)
+    bo_experiment = BayesianOptimisation(experiment=experiment.opt_experiment)
+    for observable_response in observables_list:
+        trial_id = observable_response.trial_id
+        ref_id = observable_response.user_id
+        variables = dict()
+        for resp in observable_response.observables:
+            variables[resp.parameter_id] = resp.observable
+        try:
+            score = f(**variables)
+        except Exception as e:
+            st.error(f"Error evaluating expression for trial {trial_id} and ref_id {ref_id}: {str(e)}")
+            continue
+        trial_update = TrialUpdate(ref_id=ref_id, objective_measurement=score)
+        bo_experiment.post_measurement(trial_id=trial_id, trial_update=trial_update)

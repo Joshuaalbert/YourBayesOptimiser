@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import aiohttp
 import streamlit as st
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('ray')
@@ -111,13 +111,16 @@ class UserObservableResponse(BaseModel):
     )
 
 
-class PullResponse(BaseModel):
+class PullParametersResponse(BaseModel):
     current_parameters: List[ParameterResponse] = Field(
         description="A list of the current parameters.",
         example=[
             build_example(ParameterResponse)
         ]
     )
+
+
+class PullObservablesResponse(BaseModel):
     user_observations: List[UserObservableResponse] = Field(
         description="A list of the user observations.",
         example=[
@@ -151,14 +154,17 @@ class PushRequest(BaseModel):
 
 
 class NoTrialSet(Exception):
-    def __init__(self, name: str):
-        self.name = name
-        super().__init__(f"No trial set for parameter: {name}")
+    pass
 
 
 def test_examples():
-    print(build_example(ParameterResponse).json(indent=2))
-    print(build_example(UserObservableResponse).json(indent=2))
+    # print(build_example(PushRequest).schema_json(indent=2))
+    # print(build_example(PushRequest).json(indent=2))
+    # print(build_example(ParameterResponse).schema_json(indent=2))
+    # print(build_example(ParameterResponse).json(indent=2))
+    # print(build_example(UserObservableResponse).schema_json(indent=2))
+    # print(build_example(UserObservableResponse).json(indent=2))
+    pass
 
 
 class ABInterface:
@@ -194,12 +200,12 @@ class ABInterface:
                 if status != 201:
                     raise APIError(f"Failed to create trial {await response.text()} Code {status}.")
 
-    async def pull_observable_data(self) -> PullResponse:
+    async def pull_parameter_data(self) -> PullParametersResponse:
         """
-        Gets the current parameters set by client (GET /ab/parameters), and the list of observations (GET /ab/observations).
-        
+        Gets the current parameters set by client (GET /ab/parameters).
+
         Returns:
-            a PullResponse object 
+            a PullParametersResponse object
         """
         async with aiohttp.ClientSession(headers=self.be_headers) as session:
             async with session.get(f'{self.backend_url}/ab/parameters') as response:
@@ -208,12 +214,24 @@ class ABInterface:
                     raise APIError(f"Failed to get current parameters {await response.text()} Code {status}.")
                 else:
                     resp_json = await response.json()
-                    st.write(resp_json)
-                    st.write(resp_json[0])
-                    st.write(type(resp_json[0]))
                     current_parameters = []
                     for _resp in resp_json:
-                        current_parameters.append(ParameterResponse.parse_obj(_resp))
+                        try:
+                            current_parameters.append(ParameterResponse.parse_obj(_resp))
+                        except ValidationError as e:
+                            raise NoTrialSet(f"No trial set for {_resp}. {str(e)}")
+        return PullParametersResponse(
+            current_parameters=current_parameters
+        )
+
+    async def pull_observable_data(self) -> PullObservablesResponse:
+        """
+        Gets the current observables set by client (GET /ab/observations).
+
+        Returns:
+            a PullObservablesResponse object
+        """
+        async with aiohttp.ClientSession(headers=self.be_headers) as session:
 
             async with session.get(f'{self.backend_url}/ab/observations') as response:
                 status = response.status
@@ -222,12 +240,11 @@ class ABInterface:
                 else:
                     user_observations: List[UserObservableResponse] = []
                     resp_json = await response.json()
-                    st.write(resp_json)
-                    st.write(resp_json[0])
-                    st.write(type[resp_json[0]])
-                    for inner_array in resp_json:
-                        user_observations.extend(map(UserObservableResponse.parse_obj, inner_array))
-        return PullResponse(
-            current_parameters=current_parameters,
+                    # st.write(resp_json)
+                    # st.write(resp_json[0])
+                    # st.write(type(resp_json[0]))
+                    for _resp in resp_json:
+                        user_observations.extend(map(UserObservableResponse.parse_obj, _resp))
+        return PullObservablesResponse(
             user_observations=user_observations
         )

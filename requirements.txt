@@ -15,3 +15,4 @@ matplotlib
 etils
 aiohttp
 pandas
+asteval
