@@ -17,7 +17,7 @@ from jax._src.random import PRNGKey
 from pydantic import BaseModel, Field
 
 from src.experiment_repo import S3Bucket, S3Interface
-from src.interfaces import ABInterface, ParameterRequest, PushRequest, PullResponse, NoTrialSet
+from src.interfaces import ABInterface, ParameterRequest, PushRequest, PullResponse, NoTrialSet, APIError
 
 
 def bytes_to_str(b):
@@ -759,7 +759,10 @@ def push_ab_trial(trial: Trial, ab_interface: ABInterface):
         for name, value in trial.param_values.items():
             parameters.append(ParameterRequest(parameter_name=name, value=value.value))
         push_request = PushRequest(trial_id=trial_id, parameters=parameters)
-        asyncio.run(ab_interface.push_new_trial(push_request=push_request))
+        try:
+            asyncio.run(ab_interface.push_new_trial(push_request=push_request))
+        except APIError as e:
+            st.error(str(e))
 
 
 def pull_ab_data(experiment: Experiment, ab_interface: ABInterface):

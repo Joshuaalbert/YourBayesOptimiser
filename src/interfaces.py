@@ -1,54 +1,162 @@
 import base64
+import inspect
 import logging
 from datetime import datetime
-from typing import List
+from typing import List, Type, TypeVar, Dict, Any
+from uuid import uuid4
 
 import aiohttp
-from pydantic import ValidationError, BaseModel
+from pydantic import ValidationError, BaseModel, Field
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('ray')
 
 
+class APIError(Exception):
+    pass
+
+
+def example_from_schema(model: Type[BaseModel]) -> Dict[str, Any]:
+    """
+    Generate example from schema and return as dict.
+
+    Args:
+        model: BaseModel
+
+    Returns: dict of example
+    """
+    example = dict()
+    properties = model.schema().get('properties', dict())
+    for field in model.__fields__:
+        # print(model, model.__fields__[field])
+        if inspect.isclass(model.__fields__[field]):
+            if issubclass(model.__fields__[field], BaseModel):
+                example[field] = example_from_schema(model.__fields__[field])
+                continue
+            example[field] = None
+        example[field] = properties[field].get('example', None)
+        # print(field, example[field])
+    return example
+
+
+_T = TypeVar('_T')
+
+
+def build_example(model: Type[_T]) -> _T:
+    """
+    Build example for model from it's schema and `example` field properties.
+
+    Args:
+        model: BaseModel
+
+    Returns:
+        example of model
+    """
+    return model(**example_from_schema(model))
+
+
 class ParameterResponse(BaseModel):
-    id: str
-    name: str
-    current_trial_id: str
-    current_value: float | int
-    updated_at: datetime
-    is_active: bool
+    id: str = Field(
+        description="The id of the parameter. This is the clients reference ID.",
+        example=str(uuid4())
+    )
+    name: str = Field(
+        description="The name of the parameter.",
+        example="price"
+    )
+    current_trial_id: str = Field(
+        description="The id of the trial that this parameter is currently set to.",
+        example=str(uuid4())
+    )
+    current_value: float | int = Field(
+        description="The value of the parameter that is currently set.",
+        example=0.99
+    )
+    updated_at: datetime = Field(
+        description="The time that the parameter was last updated. With tzinfo set.",
+        example=datetime.fromisoformat(datetime.now().isoformat() + "Z")
+    )
+    is_active: bool = Field(
+        description="Whether this parameter is currently active.",
+        example=True
+    )
 
 
 class ObservableResponse(BaseModel):
-    parameter_id: str
-    observable: float | int
+    parameter_id: str = Field(
+        description="A unique id of the parameter that this observation is for.",
+        example='is_subscribed'
+    )
+    observable: float | int = Field(
+        description="The value of the observable.",
+        example=1
+    )
 
 
 class UserObservableResponse(BaseModel):
-    user_id: str
-    trial_id: str
-    observables: List[ObservableResponse]
+    user_id: str = Field(
+        description="A unique id of the user that this observation is for.",
+        example=str(uuid4())
+    )
+    trial_id: str = Field(
+        description="The id of the trial that this observation is for.",
+        example=str(uuid4())
+    )
+    observables: List[ObservableResponse] = Field(
+        description="A list of observables for this user.",
+        example=[
+            build_example(ObservableResponse)
+        ]
+    )
 
 
 class PullResponse(BaseModel):
-    current_parameters: List[ParameterResponse]
-    user_observations: List[UserObservableResponse]
+    current_parameters: List[ParameterResponse] = Field(
+        description="A list of the current parameters.",
+        example=[
+            build_example(ParameterResponse)
+        ]
+    )
+    user_observations: List[UserObservableResponse] = Field(
+        description="A list of the user observations.",
+        example=[
+            build_example(UserObservableResponse)
+        ]
+    )
 
 
 class ParameterRequest(BaseModel):
-    parameter_name: str
-    value: float | int
+    parameter_name: str = Field(
+        description="The name of the parameter.",
+        example="price"
+    )
+    value: float | int = Field(
+        description="The value of the parameter.",
+        example=0.99
+    )
 
 
 class PushRequest(BaseModel):
-    trial_id: str
-    parameters: List[ParameterRequest]
+    trial_id: str = Field(
+        description="The id of the trial that this parameter is currently set to.",
+        example=str(uuid4())
+    )
+    parameters: List[ParameterRequest] = Field(
+        description="A list of the parameters to push.",
+        example=[
+            build_example(ParameterRequest)
+        ]
+    )
 
 
 class NoTrialSet(Exception):
     def __init__(self, name: str):
         self.name = name
         super().__init__(f"No trial set for parameter: {name}")
+
+
+def test_examples():
+    print(build_example(ParameterResponse).json(indent=2))
 
 
 class ABInterface:
@@ -82,7 +190,7 @@ class ABInterface:
                                     data=push_request.json()) as response:
                 status = response.status
                 if status != 201:
-                    raise RuntimeError(f"Failed to create trial {await response.text()} Code {status}.")
+                    raise APIError(f"Failed to create trial {await response.text()} Code {status}.")
 
     async def pull_observable_data(self) -> PullResponse:
         """
@@ -95,7 +203,7 @@ class ABInterface:
             async with session.get(f'{self.backend_url}/ab/parameters') as response:
                 status = response.status
                 if status != 200:
-                    raise RuntimeError(f"Failed to get current parameters {await response.text()} Code {status}.")
+                    raise APIError(f"Failed to get current parameters {await response.text()} Code {status}.")
                 else:
                     resp_json = await response.json()
                     current_parameters = []
@@ -108,7 +216,7 @@ class ABInterface:
             async with session.get(f'{self.backend_url}/ab/observations') as response:
                 status = response.status
                 if status != 200:
-                    logger.info(f"Failed to get observations {await response.text()} Code {status}.")
+                    raise APIError(f"Failed to get observations {await response.text()} Code {status}.")
                 else:
                     user_observations: List[UserObservableResponse] = []
                     for inner_array in (await response.json()):
