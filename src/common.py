@@ -9,7 +9,7 @@ from uuid import uuid4
 import pandas as pd
 import streamlit as st
 from bojaxns import OptimisationExperiment, Parameter, ContinuousPrior, IntegerPrior, CategoricalPrior, ParameterSpace, \
-    NewExperimentRequest, BayesianOptimisation, TrialUpdate, Trial
+    NewExperimentRequest, BayesianOptimisation, TrialUpdate, Trial, InvalidTrial
 from bojaxns.common import FloatValue, IntValue
 from bojaxns.gaussian_process_formulation.distribution_math import NotEnoughData
 from jax import random
@@ -839,4 +839,8 @@ def update_experiment_trial_scores(experiment: Experiment, observables_list: Lis
             st.error(f"Error evaluating expression for trial {trial_id} and ref_id {ref_id}: {str(e)}")
             continue
         trial_update = TrialUpdate(ref_id=ref_id, objective_measurement=score)
-        bo_experiment.post_measurement(trial_id=trial_id, trial_update=trial_update)
+        try:
+            bo_experiment.post_measurement(trial_id=trial_id, trial_update=trial_update)
+        except InvalidTrial:
+            st.error(f"Invalid trial {trial_id}.")
+            continue
