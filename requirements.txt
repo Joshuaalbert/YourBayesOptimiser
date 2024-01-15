@@ -1,12 +1,9 @@
 streamlit
-bojaxns>=1.0.5
+bojaxns==1.1.0
 boto3[crt]<=1.15.3
 botocore
 jax
 jaxlib
-tensorflow
-tensorflow_probability
-jaxns>=2.2.3
 pydantic
 chex>=0.0.8
 mctx
